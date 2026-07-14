@@ -1,9 +1,15 @@
+import dns from 'dns'
 import nodemailer from 'nodemailer'
+
+// Render can't route IPv6 to Gmail SMTP — force IPv4
+dns.setDefaultResultOrder('ipv4first')
 
 const transporter =
   nodemailer.createTransport({
 
-    service: 'gmail',
+    host: 'smtp.gmail.com',
+    port: 465,
+    secure: true,
 
     auth: {
       user: process.env.EMAIL_USER,
@@ -12,7 +18,9 @@ const transporter =
 
     tls: {
       rejectUnauthorized: false
-    }
+    },
+
+    connectionTimeout: 15000,
 })
 
 export const sendOtpEmail =
