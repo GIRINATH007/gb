@@ -209,6 +209,38 @@ export async function getFriendProfile(req, res) {
   }
 }
 
+export async function removeFriend(req, res) {
+  try {
+    const userId = req.user?.id
+    const { friendId } = req.params
+
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: 'Missing authenticated user',
+        code: 'AUTH_REQUIRED',
+      })
+    }
+
+    if (!friendId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Friend ID is required',
+        code: 'VALIDATION_ERROR',
+      })
+    }
+
+    await friendService.removeFriend(userId, friendId)
+
+    return res.status(200).json({
+      success: true,
+      message: 'Friend removed',
+    })
+  } catch (error) {
+    return handleServiceError(res, error, 'FRIEND_REMOVE_ERROR')
+  }
+}
+
 export async function getFriendPassport(req, res) {
   try {
     const userId = req.user?.id
@@ -239,36 +271,4 @@ export async function getFriendPassport(req, res) {
   } catch (error) {
     return handleServiceError(res, error, 'FRIEND_PASSPORT_ERROR')
   }
-}
-export async function unfriend(req, res) {
-  try {
-    const userId = req.user?.id
-    const { friendId } = req.params
-
-    if (!userId) {
-      return res.status(401).json({
-        success: false,
-        message: 'Missing authenticated user',
-        code: 'AUTH_REQUIRED',
-      })
-    }
-
-    if (!friendId) {
-      return res.status(400).json({
-        success: false,
-        message: 'Friend ID is required in URL parameters',
-        code: 'VALIDATION_ERROR',
-      })
-    }
-
-    await friendService.removeFriendship(userId, friendId)
-
-    return res.status(200).json({
-      success: true,
-      message: 'Friend successfully removed',
-    })
-  } catch (error) {
-    return handleServiceError(res, error, 'FRIEND_UNFRIEND_ERROR')
-  }
-
 }

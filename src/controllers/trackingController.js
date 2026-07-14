@@ -1,80 +1,77 @@
 import * as trackingService from '../services/trackingService.js'
-import * as statsService from '../services/statsService.js' // Pull in your existing stats/XP logic
 
-export async function saveTrack(req, res, next) {
-    try {
-        const userId = req.user.id;
-        const {
-            localSessionId,
-            startedAt,
-            endedAt,
-            durationSeconds,
-            points,
-            distanceMetres,
-            elevationGainMetres,
-            avgPaceSecondsPerKm,
-            splits
-        } = req.body;
+/**
+ * POST /tracking/complete
+ * Requires: Authorization: Bearer <token>
+ * Body: { localSessionId, startedAt, endedAt, durationSeconds, distanceMetres, points }
+ */
+export async function complete(req, res) {
+  try {
+    const userId = req.user?.id
 
-        if (!localSessionId || !startedAt || !endedAt || !Array.isArray(points) || points.length === 0) {
-            return res.status(400).json({ error: 'Missing or malformed tracking data payloads.' });
-        }
-
-        // 1. Save the basic raw points stream
-        const result = await trackingService.createRouteSession(userId, {
-            localSessionId,
-            startedAt,
-            endedAt,
-            durationSeconds,
-            points,
-            distanceMetres,
-            elevationGainMetres,
-            avgPaceSecondsPerKm,
-            splits
-        });
-
-        // 2. Process spatial polygon loop configurations
-        const territory = await trackingService.processTerritory(result.routeId, userId);
-
-        let xpEarned = 0;
-        if (territory.is_valid_loop) {
-            // Scale logic example: 1 XP per 20 square meters captured
-            xpEarned = Math.min(Math.floor(territory.area_sqm / 20), 500);
-
-            // Increment profile XP using your project's stats handler [cite: 107]
-            if (xpEarned > 0) {
-                await statsService.incrementStats(userId, { xp: xpEarned }); // Syncs level up rules dynamically [cite: 107]
-            }
-        }
-
-        // Return a fully unified payload matching what TerritoryResultScreen.js wants 
-        return res.status(201).json({
-            message: 'Tracking and territory processed successfully',
-            routeId: result.routeId,
-            territory: {
-                id: territory.territory_id,
-                area: territory.area_sqm,
-                xpEarned: xpEarned,
-                isValidLoop: territory.is_valid_loop
-            }
-        });
-    } catch (error) {
-        next(error);
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: 'Missing authenticated user',
+        code: 'AUTH_REQUIRED',
+      })
     }
-}
 
-export async function getTrackDetails(req, res) {
-    try {
-        const { routeId } = req.params
-        const userId = req.user.id
+    const {
+      localSessionId,
+      startedAt,
+      endedAt,
+      distanceMetres,
+      durationSeconds,
+      points,
+      elevationGainMetres,
+      avgPaceSecondsPerKm,
+      splits,
+    } = req.body
 
-        const track = await trackingService.getRouteWithPoints(routeId, userId)
-        if (!track) {
-            return res.status(404).json({ success: false, message: 'Track session not found' })
-        }
-
-        return res.status(200).json({ success: true, data: track })
-    } catch (error) {
-        return res.status(500).json({ success: false, message: error.message })
+    if (!Array.isArray(points) || points.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'points must be a non-empty array',
+        code: 'MISSING_POINTS',
+      })
     }
+
+    if (!Number.isFinite(distanceMetres) || distanceMetres < 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'distanceMetres must be a non-negative number',
+        code: 'INVALID_DISTANCE',
+      })
+    }
+
+    if (!Number.isFinite(durationSeconds) || durationSeconds < 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'durationSeconds must be a non-negative number',
+        code: 'INVALID_DURATION',
+      })
+    }
+
+    const session = await trackingService.completeSession(userId, {
+      localSessionId,
+      startedAt,
+      endedAt,
+      distanceMetres,
+      durationSeconds,
+      points,
+      elevationGainMetres,
+      avgPaceSecondsPerKm,
+      splits,
+    })
+
+    return res.status(201).json({ success: true, data: session })
+  } catch (error) {
+    console.error('[tracking/complete]', error)
+    return res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to complete tracking session',
+      code: error.code || 'TRACKING_COMPLETE_ERROR',
+    })
+  }
 }

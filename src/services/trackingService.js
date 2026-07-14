@@ -1,83 +1,94 @@
-import { supabaseServiceRole } from '../config/supabase.js'
+import supabase from '../config/supabase.js'
+import { processTrackingSession } from './territoryService.js'
 
-export async function createRouteSession(userId, data) {
-    // 1. Insert parent session with new metric columns passed from frontend
-    const { data: session, error: sessionError } = await supabaseServiceRole
-        .from('route_sessions')
-        .insert([{
-            user_id: userId,
-            local_session_id: data.localSessionId,
-            started_at: data.startedAt,
-            ended_at: data.endedAt,
-            duration_seconds: data.durationSeconds || null,
-            distance_metres: data.distanceMetres || null,
-            elevation_gain_metres: data.elevationGainMetres || null,
-            avg_pace_seconds_per_km: data.avgPaceSecondsPerKm || null,
-            splits: data.splits ? JSON.stringify(data.splits) : '[]'
-        }])
-        .select()
-        .single();
+// Award 1 loop point per 100 metres walked/run.
+const LOOP_POINTS_PER_METRE = 0.01
 
-    if (sessionError) throw sessionError;
+// Postgres unique-violation error code.
+const PG_UNIQUE_VIOLATION = '23505'
 
-    // 2. Format point streams supporting both native telemetry and simplified { lat, lng } signatures
-    const bulkPoints = data.points.map((pt, idx) => ({
-        session_id: session.id,
-        sequence_index: pt.sequenceIndex !== undefined ? pt.sequenceIndex : idx,
-        latitude: pt.latitude ?? pt.lat, // Resolves the gap with simplified paths safely
-        longitude: pt.longitude ?? pt.lng, // Resolves the gap with simplified paths safely
-        accuracy: pt.accuracy ?? null,
-        altitude: pt.altitude ?? null,
-        speed: pt.speed ?? null,
-        heading: pt.heading ?? null,
-        recorded_at: pt.recordedAt ?? new Date().toISOString()
-    }));
+/**
+ * Persist a completed tracking session and atomically update user stats.
+ *
+ * Idempotent: if local_session_id already exists (e.g. "Try Again" retry on
+ * the client), the existing row is returned WITHOUT re-crediting stats so
+ * distance and loop points are never double-counted.
+ *
+ * @param {string} userId
+ * @param {{ localSessionId, startedAt, endedAt, distanceMetres, durationSeconds, points }} payload
+ * @returns {Promise<object>} Session row plus loopPointsAwarded
+ */
+export async function completeSession(userId, payload) {
+  const {
+    localSessionId,
+    startedAt,
+    endedAt,
+    distanceMetres,
+    durationSeconds,
+    points,
+    elevationGainMetres = 0,
+    avgPaceSecondsPerKm = 0,
+    splits = [],
+  } = payload
 
-    // 3. Perform a bulk insert of the formatted telemetry points
-    const { error: pointsError } = await supabaseServiceRole
-        .from('route_points')
-        .insert(bulkPoints);
+  const loopPoints = Math.round(distanceMetres * LOOP_POINTS_PER_METRE)
 
-    if (pointsError) throw pointsError;
+  // Attempt to insert the tracking session record.
+  const { data, error } = await supabase
+    .from('tracking_sessions')
+    .insert([{
+      user_id:                  userId,
+      local_session_id:         localSessionId,
+      distance_metres:          distanceMetres,
+      duration_seconds:         durationSeconds,
+      started_at:               startedAt,
+      ended_at:                 endedAt,
+      points:                   points,
+      elevation_gain_metres:    elevationGainMetres,
+      avg_pace_seconds_per_km:  avgPaceSecondsPerKm,
+      splits:                   splits,
+    }])
+    .select()
+    .single()
 
-    return { routeId: session.id };
-}
+  // Unique violation → session already saved (client retry path).
+  // Return the existing row without re-crediting stats.
+  if (error?.code === PG_UNIQUE_VIOLATION) {
+    const { data: existing, error: fetchError } = await supabase
+      .from('tracking_sessions')
+      .select()
+      .eq('local_session_id', localSessionId)
+      .single()
 
-export async function getRouteWithPoints(routeId, userId) {
-    const { data: session, error: sErr } = await supabaseServiceRole
-        .from('route_sessions')
-        .select('*')
-        .eq('id', routeId)
-        .eq('user_id', userId)
-        .single();
+    if (fetchError) throw fetchError
+    return { ...existing, loopPointsAwarded: 0, alreadySaved: true }
+  }
 
-    if (sErr || !session) return null;
+  if (error) throw error
 
-    const { data: points, error: pErr } = await supabaseServiceRole
-        .from('route_points')
-        .select('sequence_index, latitude, longitude, accuracy, altitude, speed, recorded_at')
-        .eq('session_id', routeId)
-        .order('sequence_index', { ascending: true });
+  // Atomically credit distance, loop points, and elevation to the user's stats row.
+  const { error: statsError } = await supabase.rpc('add_tracking_stats', {
+    p_user_id:        userId,
+    p_distance:       distanceMetres,
+    p_loop_points:    loopPoints,
+    p_elevation_gain: elevationGainMetres,
+  })
 
-    if (pErr) throw pErr;
+  if (statsError) throw statsError
 
-    return {
-        ...session,
-        points
-    };
-}
+  // Process territory pipeline (non-blocking — don't fail session if territory fails)
+  const territoryResult = await processTrackingSession(
+    userId,
+    data.id,
+    points || [],
+  ).catch((err) => {
+    console.warn('[tracking] territory pipeline error:', err?.message)
+    return null
+  })
 
-//Processes polygon coordinates for closed-loop territory evaluation via PostGIS
-
-export async function processTerritory(routeId, userId) {
-    const { data, error } = await supabaseServiceRole.rpc('process_route_territory', {
-        target_session_id: routeId
-    })
-
-    if (error) {
-        console.error('PostGIS Territory Processing Error:', error)
-        return { success: false, area_sqm: 0, xp_earned: 0 }
-    }
-
-    return data || { success: true }
+  return {
+    ...data,
+    loopPointsAwarded: loopPoints,
+    territory: territoryResult,
+  }
 }

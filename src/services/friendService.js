@@ -1,8 +1,11 @@
 import supabase from '../config/supabase.js'
 import * as passportService from './passportService.js'
-import { supabaseServiceRole } from '../config/supabase.js'
 
-const PROFILE_PUBLIC_FIELDS = 'id, username, avatar_url, xp, level'
+const PROFILE_PUBLIC_FIELDS =
+  'id, username, avatar_url, bio, xp, level, created_at'
+
+const STATS_CORE_FIELDS =
+  'missions_completed, distance_travelled, energy, loop_points, global_rank, coins'
 
 function createServiceError(message, code, statusCode = 400) {
   const error = new Error(message)
@@ -326,11 +329,17 @@ export async function getFriendProfileSummary(userId, friendId) {
     throw createServiceError('Users are not friends', 'NOT_FRIENDS', 403)
   }
 
-  const { data: profile, error: profileError } = await supabase
-    .from('profiles')
-    .select(PROFILE_PUBLIC_FIELDS)
-    .eq('id', friendId)
-    .single()
+  const [
+    { data: profile, error: profileError },
+    friends_count,
+  ] = await Promise.all([
+    supabase
+      .from('profiles')
+      .select(PROFILE_PUBLIC_FIELDS)
+      .eq('id', friendId)
+      .single(),
+    getFriendsCount(friendId),
+  ])
 
   if (profileError) {
     if (profileError.code === 'PGRST116') {
@@ -340,15 +349,87 @@ export async function getFriendProfileSummary(userId, friendId) {
     throw profileError
   }
 
-  const friends_count = await getFriendsCount(friendId)
+  // Fetch stats — try with coins column first, fall back without it
+  let stats = null
+  const { data: statsData, error: statsError } = await supabase
+    .from('user_stats')
+    .select(STATS_CORE_FIELDS)
+    .eq('user_id', friendId)
+    .maybeSingle()
+
+  if (statsError) {
+    // If the error is about a missing column (e.g. coins not yet migrated),
+    // retry with the base fields only
+    const isColumnError =
+      statsError.message?.includes('column') ||
+      statsError.code === '42703'
+
+    if (isColumnError) {
+      const { data: fallbackStats, error: fallbackError } = await supabase
+        .from('user_stats')
+        .select('missions_completed, distance_travelled, energy, loop_points, global_rank')
+        .eq('user_id', friendId)
+        .maybeSingle()
+
+      if (fallbackError) {
+        throw fallbackError
+      }
+
+      stats = fallbackStats
+    } else {
+      throw statsError
+    }
+  } else {
+    stats = statsData
+  }
 
   return {
     id: profile.id,
     username: profile.username,
     avatar_url: profile.avatar_url,
+    bio: profile.bio ?? '',
     xp: profile.xp,
     level: profile.level,
+    created_at: profile.created_at,
     friends_count,
+    stats: {
+      missions_completed: stats?.missions_completed ?? 0,
+      distance_travelled: stats?.distance_travelled ?? 0,
+      energy: stats?.energy ?? 0,
+      loop_points: stats?.loop_points ?? 0,
+      global_rank: stats?.global_rank ?? null,
+      coins: stats?.coins ?? 0,
+    },
+  }
+}
+
+export async function removeFriend(userId, friendId) {
+  if (userId === friendId) {
+    throw createServiceError('Cannot unfriend yourself', 'SELF_UNFRIEND')
+  }
+
+  if (!(await areFriends(userId, friendId))) {
+    throw createServiceError('Users are not friends', 'NOT_FRIENDS', 403)
+  }
+
+  const { error: firstError } = await supabase
+    .from('friends')
+    .delete()
+    .eq('user_id', userId)
+    .eq('friend_id', friendId)
+
+  if (firstError) {
+    throw firstError
+  }
+
+  const { error: secondError } = await supabase
+    .from('friends')
+    .delete()
+    .eq('user_id', friendId)
+    .eq('friend_id', userId)
+
+  if (secondError) {
+    throw secondError
   }
 }
 
@@ -358,22 +439,4 @@ export async function getFriendPassport(userId, friendId) {
   }
 
   return passportService.getVisitedCities(friendId)
-}
-
-export async function removeFriendship(userId, friendId) {
-
-  const { error } = await supabaseServiceRole
-    .from('friends')
-    .delete()
-    .or(`and(user_id.eq.${userId},friend_id.eq.${friendId}),and(user_id.eq.${friendId},friend_id.eq.${userId})`);
-
-  if (error) throw error;
-
-
-  await supabaseServiceRole
-    .from('friend_requests')
-    .delete()
-    .or(`and(sender_id.eq.${userId},receiver_id.eq.${friendId}),and(sender_id.eq.${friendId},receiver_id.eq.${userId})`);
-
-  return true;
 }

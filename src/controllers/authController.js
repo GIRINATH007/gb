@@ -63,46 +63,24 @@ export async function logout(req, res) {
     return handleError(res, error)
   }
 }
-export async function passwordResetRequest(req, res) {
-  try {
-    const { email } = req.body || {}
 
-    if (!email) {
+export async function refresh(req, res) {
+  try {
+    const { refresh_token } = req.body
+
+    if (!refresh_token) {
       return res.status(400).json({
         success: false,
-        message: 'Missing required field: email',
+        message: 'Missing required field: refresh_token',
         code: 'VALIDATION_ERROR',
       })
     }
 
-    await authService.requestPasswordReset(email)
+    const result = await authService.refreshSession({ refresh_token })
 
     return res.status(200).json({
       success: true,
-      message: 'Password reset code dispatched to email',
-    })
-  } catch (error) {
-    return handleError(res, error)
-  }
-}
-
-export async function passwordResetComplete(req, res) {
-  try {
-    const { email, otpCode, newPassword } = req.body || {}
-
-    if (!email || !otpCode || !newPassword) {
-      return res.status(400).json({
-        success: false,
-        message: 'Missing required fields: email, otpCode, and newPassword',
-        code: 'VALIDATION_ERROR',
-      })
-    }
-
-    await authService.completePasswordReset(email, otpCode, newPassword)
-
-    return res.status(200).json({
-      success: true,
-      message: 'Password updated successfully',
+      ...result,
     })
   } catch (error) {
     return handleError(res, error)

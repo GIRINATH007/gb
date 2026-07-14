@@ -1,53 +1,43 @@
-import supabase from '../config/supabase.js';
+import supabase from '../config/supabase.js'
 
-export const requireAuth = async (req, res, next) => {
-  try {
-    const authHeader = req.headers.authorization;
+export async function requireAuth(req, res, next) {
+  const authHeader = req.headers.authorization || ''
+  const [scheme, token] = authHeader.split(' ')
 
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return res.status(401).json({
-        success: false,
-        message: 'Access token missing or invalid format',
-        code: 'AUTH_REQUIRED',
-      });
-    }
-
-    const token = authHeader.split(' ')[1];
-    const { data: { user }, error } = await supabase.auth.getUser(token);
-
-    if (error || !user) {
-      return res.status(401).json({
-        success: false,
-        message: 'Invalid or expired access token',
-        code: 'AUTH_INVALID',
-      });
-    }
-
-    req.user = {
-      id: user.id,
-      email: user.email,
-    };
-
-    return next();
-  } catch (err) {
-    return res.status(500).json({
+  if (scheme !== 'Bearer' || !token) {
+    return res.status(401).json({
       success: false,
-      message: 'Internal server authorization error',
-      code: 'INTERNAL_AUTH_ERROR',
-    });
+      message: 'Missing authorization token',
+      code: 'AUTH_REQUIRED',
+    })
   }
-};
 
-export const requireSelf = (req, res, next) => {
-  const targetId = req.params.id || req.params.userId;
+  const { data, error } = await supabase.auth.getUser(token)
 
-  if (!req.user || req.user.id !== targetId) {
+  if (error || !data?.user) {
+    return res.status(401).json({
+      success: false,
+      message: 'Invalid authorization token',
+      code: 'AUTH_INVALID',
+    })
+  }
+
+  req.user = {
+    id: data.user.id,
+    email: data.user.email,
+  }
+
+  return next()
+}
+
+export function requireSelf(req, res, next) {
+  if (!req.user || req.user.id !== req.params.id) {
     return res.status(403).json({
       success: false,
-      message: 'Forbidden: You do not have permission to modify this resource',
+      message: 'Forbidden',
       code: 'FORBIDDEN',
-    });
+    })
   }
 
-  return next();
-};
+  return next()
+}

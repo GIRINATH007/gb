@@ -157,19 +157,3 @@ export async function getRoomDetails(req, res) {
     return handleError(res, error)
   }
 }
-
-export async function getRoomMembers(req, res) {
-  try {
-    const { roomId } = req.params
-
-    const members = await roomService.getRoomMembers(roomId)
-
-    return res.status(200).json({
-      success: true,
-      members,
-      count: members.length,
-    })
-  } catch (error) {
-    return handleError(res, error)
-  }
-}
