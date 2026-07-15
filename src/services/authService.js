@@ -141,18 +141,130 @@ export async function logout() {
   }
 }
 
-export async function refreshSession({ refresh_token }) {
+export async function refreshSession(refreshToken) {
   try {
-    const { data, error } = await supabase.auth.refreshSession({ refresh_token })
+    const { data, error } = await supabase.auth.refreshSession({ refresh_token: refreshToken })
 
-    if (error || !data?.session) {
-      throw mapAuthError(error || new Error('No session returned from refresh'))
+    if (error) {
+      throw mapAuthError(error)
+    }
+
+    if (!data.session) {
+      throw new AuthAppError('Session refresh returned no session', 401, 'REFRESH_FAILED')
     }
 
     return {
       user: sanitizeUser(data.user),
       session: data.session,
     }
+  } catch (error) {
+    if (error instanceof AuthAppError) throw error
+    throw mapAuthError(error)
+  }
+}
+
+export async function requestPasswordReset(email) {
+  try {
+    const adminClient = getServiceRoleClient()
+
+    const { data: profile, error: profileErr } = await adminClient
+      .from('profiles')
+      .select('id')
+      .eq('email', email)
+      .single()
+
+    if (profileErr || !profile) {
+      throw new AuthAppError(
+        'No account found with this email address',
+        404,
+        'USER_NOT_FOUND'
+      )
+    }
+
+    // Strict 4-digit code generator logic
+    const otpCode = Math.floor(1000 + Math.random() * 9000).toString()
+    const hashedOtp = await bcrypt.hash(otpCode, 10)
+    const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString()
+
+    const { error: otpErr } = await adminClient
+      .from('otp_codes')
+      .insert({
+        user_id: profile.id,
+        email,
+        code_hash: hashedOtp,
+        type: 'password_reset',
+        expires_at: expiresAt
+      })
+
+    if (otpErr) throw mapAuthError(otpErr)
+
+    const transporter = nodemailer.createTransport({
+      service: 'gmail',
+      auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS,
+      },
+    })
+
+    await transporter.sendMail({
+      from: `"GeoLoop Support" <${process.env.EMAIL_USER}>`,
+      to: email,
+      subject: 'GeoLoop - Password Reset Verification Code',
+      text: `Your password reset verification code is: ${otpCode}. It expires in 15 minutes.`,
+      html: `<p>Your password reset verification code is: <strong>${otpCode}</strong>.</p><p>It expires in 15 minutes.</p>`,
+    })
+
+    return true
+  } catch (error) {
+    if (error instanceof AuthAppError) throw error
+    throw mapAuthError(error)
+  }
+}
+
+export async function completePasswordReset(email, otpCode, newPassword) {
+  try {
+    const adminClient = getServiceRoleClient()
+
+    const { data: otpRecords, error: otpErr } = await adminClient
+      .from('otp_codes')
+      .select('*')
+      .eq('email', email)
+      .eq('type', 'password_reset')
+      .gt('expires_at', new Date().toISOString())
+      .order('created_at', { ascending: false })
+
+    if (otpErr || !otpRecords || otpRecords.length === 0) {
+      throw new AuthAppError(
+        'Invalid or expired reset code',
+        400,
+        'INVALID_OTP'
+      )
+    }
+
+    const latestRecord = otpRecords[0]
+
+    const isValid = await bcrypt.compare(otpCode, latestRecord.code_hash)
+    if (!isValid) {
+      throw new AuthAppError(
+        'Incorrect verification code',
+        400,
+        'INVALID_OTP'
+      )
+    }
+
+    const { error: authErr } = await adminClient.auth.admin.updateUserById(
+      latestRecord.user_id,
+      { password: newPassword }
+    )
+
+    if (authErr) throw mapAuthError(authErr)
+
+    await adminClient
+      .from('otp_codes')
+      .delete()
+      .eq('id', latestRecord.id)
+
+    return true
   } catch (error) {
     if (error instanceof AuthAppError) throw error
     throw mapAuthError(error)

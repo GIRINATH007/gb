@@ -1,4 +1,4 @@
-import supabase from '../config/supabase.js'
+import { supabaseServiceRole } from '../config/supabase.js'
 import { processTrackingSession } from './territoryService.js'
 
 // Award 1 loop point per 100 metres walked/run.
@@ -34,7 +34,7 @@ export async function completeSession(userId, payload) {
   const loopPoints = Math.round(distanceMetres * LOOP_POINTS_PER_METRE)
 
   // Attempt to insert the tracking session record.
-  const { data, error } = await supabase
+  const { data, error } = await supabaseServiceRole
     .from('tracking_sessions')
     .insert([{
       user_id:                  userId,
@@ -54,7 +54,7 @@ export async function completeSession(userId, payload) {
   // Unique violation → session already saved (client retry path).
   // Return the existing row without re-crediting stats.
   if (error?.code === PG_UNIQUE_VIOLATION) {
-    const { data: existing, error: fetchError } = await supabase
+    const { data: existing, error: fetchError } = await supabaseServiceRole
       .from('tracking_sessions')
       .select()
       .eq('local_session_id', localSessionId)
@@ -67,7 +67,7 @@ export async function completeSession(userId, payload) {
   if (error) throw error
 
   // Atomically credit distance, loop points, and elevation to the user's stats row.
-  const { error: statsError } = await supabase.rpc('add_tracking_stats', {
+  const { error: statsError } = await supabaseServiceRole.rpc('add_tracking_stats', {
     p_user_id:        userId,
     p_distance:       distanceMetres,
     p_loop_points:    loopPoints,
@@ -90,5 +90,6 @@ export async function completeSession(userId, payload) {
     ...data,
     loopPointsAwarded: loopPoints,
     territory: territoryResult,
+    alreadySaved: false,
   }
 }

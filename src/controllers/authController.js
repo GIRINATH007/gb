@@ -71,6 +71,28 @@ export async function refresh(req, res) {
     if (!refresh_token) {
       return res.status(400).json({
         success: false,
+        message: 'Missing refresh token',
+        code: 'VALIDATION_ERROR',
+      })
+    }
+
+    const result = await authService.refreshSession(refresh_token)
+
+    return res.status(200).json({
+      success: true,
+      ...result,
+    })
+  } catch (error) {
+    return handleError(res, error)
+  }
+}
+export async function passwordResetRequest(req, res) {
+  try {
+    const { refresh_token } = req.body
+
+    if (!refresh_token) {
+      return res.status(400).json({
+        success: false,
         message: 'Missing required field: refresh_token',
         code: 'VALIDATION_ERROR',
       })

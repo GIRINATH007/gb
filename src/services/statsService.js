@@ -1,7 +1,7 @@
-import supabase from '../config/supabase.js'
+import { supabaseServiceRole } from '../config/supabase.js'
 
 export async function getStatsByUserId(userId) {
-  const { data, error } = await supabase
+  const { data, error } = await supabaseServiceRole
     .from('user_stats')
     .select('*')
     .eq('user_id', userId)
@@ -15,7 +15,7 @@ export async function getStatsByUserId(userId) {
 }
 
 export async function createStats(userId) {
-  const { data, error } = await supabase
+  const { data, error } = await supabaseServiceRole
     .from('user_stats')
     .insert([{ user_id: userId }])
     .select()
@@ -29,7 +29,7 @@ export async function createStats(userId) {
 }
 
 export async function updateStatsByUserId(userId, updates) {
-  const { data, error } = await supabase
+  const { data, error } = await supabaseServiceRole
     .from('user_stats')
     .update(updates)
     .eq('user_id', userId)
@@ -44,7 +44,7 @@ export async function updateStatsByUserId(userId, updates) {
 }
 
 async function getProfileProgress(userId) {
-  const { data, error } = await supabase
+  const { data, error } = await supabaseServiceRole
     .from('profiles')
     .select('xp, level')
     .eq('id', userId)
@@ -58,7 +58,7 @@ async function getProfileProgress(userId) {
 }
 
 async function updateProfileProgress(userId, updates) {
-  const { data, error } = await supabase
+  const { data, error } = await supabaseServiceRole
     .from('profiles')
     .update(updates)
     .eq('id', userId)

@@ -4,6 +4,6 @@ import { requireAuth } from '../middleware/authMiddleware.js'
 
 const router = express.Router()
 
-router.post('/complete', requireAuth, trackingController.complete)
+router.post('/complete', requireAuth, trackingController.saveTrack)
 
 export default router

@@ -43,6 +43,20 @@ app.use('/otp', otpRoutes)
 
 const PORT = process.env.PORT || 5000
 
+// ── Global error handler ───────────────────────────────────────────────────
+app.use((err, req, res, next) => {
+  console.error('[ErrorHandler]', err?.message || err)
+  const statusCode = err.statusCode || 500
+  const message = err.message || 'Internal server error'
+  const code = err.code || 'INTERNAL_ERROR'
+
+  return res.status(statusCode).json({
+    success: false,
+    message,
+    code,
+  })
+})
+
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`)
 })
