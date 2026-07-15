@@ -142,6 +142,65 @@ export async function leaveRoom(req, res) {
   }
 }
 
+//POST /rooms/:roomId/capture
+export async function capturePath(req, res) {
+  try {
+    const userId = req.user.id
+    const { roomId } = req.params
+    const { points, distanceMetres } = req.body
+
+    if (!Array.isArray(points) || points.length < 2) {
+      return res.status(400).json({
+        success: false,
+        message: 'At least 2 GPS points are required',
+        code: 'VALIDATION_ERROR',
+      })
+    }
+
+    const result = await roomService.capturePathInRoom(userId, roomId, points, distanceMetres || 0)
+
+    return res.status(200).json({
+      success: true,
+      ...result,
+    })
+  } catch (error) {
+    return handleError(res, error)
+  }
+}
+
+//GET /rooms/:roomId/territories
+export async function getTerritories(req, res) {
+  try {
+    const { roomId } = req.params
+
+    const territories = await roomService.getTerritoriesForRoom(roomId)
+
+    return res.status(200).json({
+      success: true,
+      territories,
+      count: territories.length,
+    })
+  } catch (error) {
+    return handleError(res, error)
+  }
+}
+
+//GET /rooms/:roomId/territories/stats
+export async function getTerritoryStats(req, res) {
+  try {
+    const { roomId } = req.params
+
+    const stats = await roomService.getRoomTerritoryStats(roomId)
+
+    return res.status(200).json({
+      success: true,
+      stats,
+    })
+  } catch (error) {
+    return handleError(res, error)
+  }
+}
+
 //GET /rooms/:roomId
 export async function getRoomDetails(req, res) {
   try {

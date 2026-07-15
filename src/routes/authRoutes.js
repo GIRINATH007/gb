@@ -9,7 +9,7 @@ router.post('/login', authController.login)
 router.post('/logout', authController.logout)
 router.post('/refresh', authController.refresh)
 router.post('/password-reset/request', authController.passwordResetRequest)
-router.post('/password-reset/complete', authController.passwordResetComplete)
+router.post('/password-reset/complete', passwordResetController.completePasswordResetController)
 
 export default router
 

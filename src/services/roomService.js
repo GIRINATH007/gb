@@ -1,5 +1,8 @@
+import { randomUUID } from 'node:crypto'
 import supabase from '../config/supabase.js'
 import { AuthAppError } from '../utils/authErrors.js'
+import { processTrackingSession } from './territoryService.js'
+import { getRoomTerritories as getTerritoriesQuery } from '../queries/territoryQueries.js'
 
 const MAX_ROOMS_PER_USER = 5
 const MAX_ROOM_MEMBERS = 20
@@ -344,6 +347,66 @@ export async function leaveRoom(userId, roomId) {
       throw error
     }
     throw new AuthAppError('Leave room failed', 500, 'LEAVE_ROOM_FAILED')
+  }
+}
+
+/**
+ * Explicitly capture a path in a room (alternative to piggybacking on tracking).
+ * Generates a temporary session reference and runs the territory pipeline.
+ *
+ * @param {string} userId
+ * @param {string} roomId
+ * @param {Array<{lat: number, lng: number}>} points
+ * @param {number} distanceMetres
+ * @returns {Promise<object>} Territory + captures + pointsEarned + scoreDelta
+ */
+export async function capturePathInRoom(userId, roomId, points, distanceMetres) {
+  const tempSessionId = randomUUID()
+
+  const result = await processTrackingSession(userId, tempSessionId, points, roomId)
+
+  return {
+    territory: result.territory,
+    captures: result.captures,
+    pointsEarned: result.pointsEarned,
+    scoreDelta: result.scoreDelta,
+  }
+}
+
+/**
+ * Get all territories in a room (for map overlay as GeoJSON).
+ *
+ * @param {string} roomId
+ * @returns {Promise<Array>}
+ */
+export async function getTerritoriesForRoom(roomId) {
+  try {
+    const territories = await getTerritoriesQuery(roomId)
+    return territories
+  } catch (error) {
+    if (error instanceof AuthAppError) throw error
+    throw new AuthAppError('Failed to fetch room territories', 500, 'TERRITORIES_FETCH_ERROR')
+  }
+}
+
+/**
+ * Get territory stats per user in a room.
+ *
+ * @param {string} roomId
+ * @returns {Promise<Array<{ user_id: string, territory_count: number, total_area_sqm: number }>>}
+ */
+export async function getRoomTerritoryStats(roomId) {
+  try {
+    const { data, error } = await supabase.rpc('get_room_territory_stats', {
+      p_room_id: roomId,
+      p_user_id: null,
+    })
+
+    if (error) throw error
+    return data || []
+  } catch (error) {
+    if (error instanceof AuthAppError) throw error
+    throw new AuthAppError('Failed to fetch territory stats', 500, 'STATS_FETCH_ERROR')
   }
 }
 

@@ -8,14 +8,16 @@ import supabase from '../config/supabase.js'
  * @param {string} sessionId
  * @param {Array<{lat: number, lng: number}>} points — simplified GPS path
  * @param {number} [bufferMetres=20]
+ * @param {string} [roomId] — scope territory to a room
  * @returns {Promise<{ territory_id: string, area_sqm: number }>}
  */
-export async function createTerritory(userId, sessionId, points, bufferMetres = 20) {
+export async function createTerritory(userId, sessionId, points, bufferMetres = 20, roomId) {
   const { data, error } = await supabase.rpc('create_territory_from_path', {
     p_user_id:        userId,
     p_session_id:     sessionId,
     p_points:         JSON.stringify(points),
     p_buffer_metres:  bufferMetres,
+    p_room_id:        roomId || null,
   })
 
   if (error) throw error
@@ -28,12 +30,14 @@ export async function createTerritory(userId, sessionId, points, bufferMetres = 
  *
  * @param {object} geometry — The GeoJSON geometry of the new territory
  * @param {string} ownerId — Exclude the attacking user's own territories
+ * @param {string} [roomId] — Scope overlap check to a single room
  * @returns {Promise<Array<{ territory_id: string, owner_id: string, overlap_sqm: number, overlap_percent: number }>>}
  */
-export async function findOverlappingTerritories(geometry, ownerId) {
+export async function findOverlappingTerritories(geometry, ownerId, roomId) {
   const { data, error } = await supabase.rpc('find_overlapping_territories', {
     p_geometry:  geometry,
     p_owner_id:  ownerId,
+    p_room_id:   roomId || null,
   })
 
   if (error) throw error
@@ -52,6 +56,23 @@ export async function getUserTerritories(userId) {
     .select('id, area_sqm, capture_count, created_at, geometry')
     .eq('owner_id', userId)
     .order('created_at', { ascending: false })
+
+  if (error) throw error
+  return data || []
+}
+
+/**
+ * Get all territories for a specific room (for map overlay).
+ * Returns GeoJSON-friendly format.
+ *
+ * @param {string} roomId
+ * @returns {Promise<Array>}
+ */
+export async function getRoomTerritories(roomId) {
+  const { data, error } = await supabase
+    .from('room_territories_view')
+    .select('id, owner_id, room_id, area_sqm, capture_count, created_at, geometry')
+    .eq('room_id', roomId)
 
   if (error) throw error
   return data || []

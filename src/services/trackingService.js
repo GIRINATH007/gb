@@ -1,4 +1,4 @@
-import { supabaseServiceRole } from '../config/supabase.js'
+import supabaseServiceRole from '../config/supabase.js'
 import { processTrackingSession } from './territoryService.js'
 
 // Award 1 loop point per 100 metres walked/run.
@@ -15,7 +15,7 @@ const PG_UNIQUE_VIOLATION = '23505'
  * distance and loop points are never double-counted.
  *
  * @param {string} userId
- * @param {{ localSessionId, startedAt, endedAt, distanceMetres, durationSeconds, points }} payload
+ * @param {{ localSessionId, startedAt, endedAt, distanceMetres, durationSeconds, points, roomId }} payload
  * @returns {Promise<object>} Session row plus loopPointsAwarded
  */
 export async function completeSession(userId, payload) {
@@ -29,6 +29,7 @@ export async function completeSession(userId, payload) {
     elevationGainMetres = 0,
     avgPaceSecondsPerKm = 0,
     splits = [],
+    roomId,
   } = payload
 
   const loopPoints = Math.round(distanceMetres * LOOP_POINTS_PER_METRE)
@@ -81,6 +82,7 @@ export async function completeSession(userId, payload) {
     userId,
     data.id,
     points || [],
+    roomId,
   ).catch((err) => {
     console.warn('[tracking] territory pipeline error:', err?.message)
     return null

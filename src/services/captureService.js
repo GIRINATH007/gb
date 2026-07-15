@@ -26,6 +26,7 @@ export function resolveCaptures(overlaps, attackInfo) {
         territory_id: overlap.territory_id,
         prev_owner_id: overlap.owner_id,
         new_owner_id: attackInfo.userId,
+        overlap_sqm: overlap.overlap_sqm,
         reason: `overlap_${overlap.overlap_percent.toFixed(1)}%`,
       })
     }

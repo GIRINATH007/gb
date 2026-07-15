@@ -1,4 +1,4 @@
-import { supabaseServiceRole } from '../config/supabase.js'
+import supabaseServiceRole from '../config/supabase.js'
 
 export async function getNotifications(req, res) {
     try {

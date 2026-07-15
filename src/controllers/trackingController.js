@@ -13,6 +13,7 @@ export async function saveTrack(req, res, next) {
             elevationGainMetres = 0,
             avgPaceSecondsPerKm = 0,
             splits = [],
+            roomId,
         } = req.body;
 
         if (!localSessionId || !startedAt || !endedAt || !Array.isArray(points) || points.length === 0) {
@@ -33,6 +34,7 @@ export async function saveTrack(req, res, next) {
             elevationGainMetres,
             avgPaceSecondsPerKm,
             splits,
+            roomId,
         });
 
         return res.status(201).json({
