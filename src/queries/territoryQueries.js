@@ -15,7 +15,7 @@ export async function createTerritory(userId, sessionId, points, bufferMetres = 
   const { data, error } = await supabase.rpc('create_territory_from_path', {
     p_user_id:        userId,
     p_session_id:     sessionId,
-    p_points:         JSON.stringify(points),
+    p_points:         points,
     p_buffer_metres:  bufferMetres,
     p_room_id:        roomId || null,
   })
