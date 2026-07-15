@@ -8,8 +8,7 @@ const LOOP_POINTS_PER_METRE = 0.01
 const LOOP_BONUS_PTS = 20
 const LOOP_MIN_DISTANCE_M = 150
 const LOOP_MAX_CLOSURE_M = 30
-const LOOP_MIN_AREA_RATIO = 1.5
-const LOOP_BUFFER_WIDTH_M = 40   // 20m buffer × 2 sides
+const LOOP_MIN_POINTS = 4
 
 // Postgres unique-violation error code.
 const PG_UNIQUE_VIOLATION = '23505'
@@ -52,6 +51,20 @@ export async function completeSession(userId, payload) {
 
   const loopPoints = Math.round(distanceMetres * LOOP_POINTS_PER_METRE)
 
+  // Loop bonus: +20 if path returns to start (haversine < 30m) and is long enough
+  let loopBonus = 0
+  if (
+    distanceMetres >= LOOP_MIN_DISTANCE_M &&
+    Array.isArray(points) && points.length >= LOOP_MIN_POINTS
+  ) {
+    const startEndDist = haversine(points[0], points[points.length - 1])
+    if (startEndDist < LOOP_MAX_CLOSURE_M) {
+      loopBonus = LOOP_BONUS_PTS
+    }
+  }
+
+  const loopPointsTotal = loopPoints + loopBonus
+
   // Attempt to insert the tracking session record.
   const { data, error } = await supabaseServiceRole
     .from('tracking_sessions')
@@ -89,7 +102,7 @@ export async function completeSession(userId, payload) {
   const { error: statsError } = await supabaseServiceRole.rpc('add_tracking_stats', {
     p_user_id:        userId,
     p_distance:       distanceMetres,
-    p_loop_points:    loopPoints,
+    p_loop_points:    loopPointsTotal,
     p_elevation_gain: elevationGainMetres,
   })
 
@@ -106,27 +119,9 @@ export async function completeSession(userId, payload) {
     return null
   })
 
-  // Loop bonus: +20 if the path returns to start with meaningful enclosed area
-  let loopBonus = 0
-  const areaSqm = territoryResult?.territory?.area_sqm
-  if (
-    roomId &&
-    areaSqm &&
-    distanceMetres >= LOOP_MIN_DISTANCE_M &&
-    Array.isArray(points) && points.length >= 2
-  ) {
-    const startEndDist = haversine(points[0], points[points.length - 1])
-    const areaRatio = areaSqm / (distanceMetres * LOOP_BUFFER_WIDTH_M)
-    if (startEndDist < LOOP_MAX_CLOSURE_M && areaRatio > LOOP_MIN_AREA_RATIO) {
-      loopBonus = LOOP_BONUS_PTS
-    }
-  }
-
-  const totalLoopPts = loopPoints + loopBonus
-
   return {
     ...data,
-    loopPointsAwarded: totalLoopPts,
+    loopPointsAwarded: loopPointsTotal,
     loopBonusAwarded: loopBonus,
     territory: territoryResult,
     alreadySaved: false,
