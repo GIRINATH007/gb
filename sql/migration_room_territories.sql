@@ -82,7 +82,7 @@ BEGIN
     ST_Area(v_polygon::GEOGRAPHY),
     p_room_id
   )
-  RETURNING id, area_sqm INTO v_territory_id, area_sqm;
+  RETURNING id, area_sqm INTO v_territory_id, v_area_sqm;
 
   territory_id := v_territory_id;
   area_sqm := v_area_sqm;

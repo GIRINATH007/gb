@@ -55,7 +55,7 @@ BEGIN
     v_polygon,
     ST_Area(v_polygon::GEOGRAPHY)    -- ::GEOGRAPHY gives area in sq metres
   )
-  RETURNING id, area_sqm INTO v_territory_id, area_sqm;
+  RETURNING id, area_sqm INTO v_territory_id, v_area_sqm;
 
   -- Return the result
   territory_id := v_territory_id;
