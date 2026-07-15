@@ -4,8 +4,26 @@ import { processTrackingSession } from './territoryService.js'
 // Award 1 loop point per 100 metres walked/run.
 const LOOP_POINTS_PER_METRE = 0.01
 
+// Loop bonus constants.
+const LOOP_BONUS_PTS = 20
+const LOOP_MIN_DISTANCE_M = 150
+const LOOP_MAX_CLOSURE_M = 30
+const LOOP_MIN_AREA_RATIO = 1.5
+const LOOP_BUFFER_WIDTH_M = 40   // 20m buffer × 2 sides
+
 // Postgres unique-violation error code.
 const PG_UNIQUE_VIOLATION = '23505'
+
+function haversine(a, b) {
+  const R = 6371000
+  const toRad = (d) => d * Math.PI / 180
+  const dLat = toRad(b.lat - a.lat)
+  const dLng = toRad(b.lng - a.lng)
+  const sinLat = Math.sin(dLat / 2)
+  const sinLng = Math.sin(dLng / 2)
+  const h = sinLat * sinLat + Math.cos(toRad(a.lat)) * Math.cos(toRad(b.lat)) * sinLng * sinLng
+  return R * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h))
+}
 
 /**
  * Persist a completed tracking session and atomically update user stats.
@@ -88,9 +106,28 @@ export async function completeSession(userId, payload) {
     return null
   })
 
+  // Loop bonus: +20 if the path returns to start with meaningful enclosed area
+  let loopBonus = 0
+  const areaSqm = territoryResult?.territory?.area_sqm
+  if (
+    roomId &&
+    areaSqm &&
+    distanceMetres >= LOOP_MIN_DISTANCE_M &&
+    Array.isArray(points) && points.length >= 2
+  ) {
+    const startEndDist = haversine(points[0], points[points.length - 1])
+    const areaRatio = areaSqm / (distanceMetres * LOOP_BUFFER_WIDTH_M)
+    if (startEndDist < LOOP_MAX_CLOSURE_M && areaRatio > LOOP_MIN_AREA_RATIO) {
+      loopBonus = LOOP_BONUS_PTS
+    }
+  }
+
+  const totalLoopPts = loopPoints + loopBonus
+
   return {
     ...data,
-    loopPointsAwarded: loopPoints,
+    loopPointsAwarded: totalLoopPts,
+    loopBonusAwarded: loopBonus,
     territory: territoryResult,
     alreadySaved: false,
   }
