@@ -43,9 +43,10 @@ export async function completeSession(userId, payload) {
     distanceMetres,
     durationSeconds,
     points,
-    elevationGainMetres = 0,
-    avgPaceSecondsPerKm = 0,
-    splits = [],
+    // === REMOVED (temporary): Splits/pace/elevation ===
+    // elevationGainMetres = 0,
+    // avgPaceSecondsPerKm = 0,
+    // splits = [],
     roomId,
   } = payload
 
@@ -76,9 +77,10 @@ export async function completeSession(userId, payload) {
       started_at:               startedAt,
       ended_at:                 endedAt,
       points:                   points,
-      elevation_gain_metres:    elevationGainMetres,
-      avg_pace_seconds_per_km:  avgPaceSecondsPerKm,
-      splits:                   splits,
+      // === REMOVED (temporary): Splits/pace/elevation ===
+      // elevation_gain_metres:    elevationGainMetres,
+      // avg_pace_seconds_per_km:  avgPaceSecondsPerKm,
+      // splits:                   splits,
     }])
     .select()
     .single()
@@ -103,7 +105,8 @@ export async function completeSession(userId, payload) {
     p_user_id:        userId,
     p_distance:       distanceMetres,
     p_loop_points:    loopPointsTotal,
-    p_elevation_gain: elevationGainMetres,
+    // === REMOVED (temporary): Splits/pace/elevation ===
+    // p_elevation_gain: elevationGainMetres,
   })
 
   if (statsError) throw statsError

@@ -10,9 +10,10 @@ export async function saveTrack(req, res, next) {
             durationSeconds,
             points,
             distanceMetres,
-            elevationGainMetres = 0,
-            avgPaceSecondsPerKm = 0,
-            splits = [],
+            // === REMOVED (temporary): Splits/pace/elevation ===
+            // elevationGainMetres = 0,
+            // avgPaceSecondsPerKm = 0,
+            // splits = [],
             roomId,
         } = req.body;
 
@@ -31,9 +32,10 @@ export async function saveTrack(req, res, next) {
             durationSeconds,
             distanceMetres,
             points,
-            elevationGainMetres,
-            avgPaceSecondsPerKm,
-            splits,
+            // === REMOVED (temporary): Splits/pace/elevation ===
+            // elevationGainMetres,
+            // avgPaceSecondsPerKm,
+            // splits,
             roomId,
         });
 

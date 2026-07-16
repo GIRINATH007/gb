@@ -6,9 +6,10 @@ CREATE TABLE public.route_sessions (
   ended_at TIMESTAMPTZ NOT NULL,
   duration_seconds INTEGER NOT NULL CHECK (duration_seconds >= 0),
   distance_metres NUMERIC(12, 2) NOT NULL DEFAULT 0 CHECK (distance_metres >= 0),
-  elevation_gain_metres NUMERIC(8, 2) NOT NULL DEFAULT 0 CHECK (elevation_gain_metres >= 0),
-  avg_pace_seconds_per_km INTEGER CHECK (avg_pace_seconds_per_km IS NULL OR avg_pace_seconds_per_km >= 0),
-  splits JSONB NOT NULL DEFAULT '[]',
+  -- === REMOVED (temporary): Splits/pace/elevation ===
+  -- elevation_gain_metres NUMERIC(8, 2) NOT NULL DEFAULT 0 CHECK (elevation_gain_metres >= 0),
+  -- avg_pace_seconds_per_km INTEGER CHECK (avg_pace_seconds_per_km IS NULL OR avg_pace_seconds_per_km >= 0),
+  -- splits JSONB NOT NULL DEFAULT '[]',
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
