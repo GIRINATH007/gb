@@ -43,8 +43,8 @@ export async function completeSession(userId, payload) {
     distanceMetres,
     durationSeconds,
     points,
-    // === REMOVED (temporary): Splits/pace/elevation ===
-    // elevationGainMetres = 0,
+    elevationGainMetres = 0,
+    // === REMOVED (temporary): Splits/pace ===
     // avgPaceSecondsPerKm = 0,
     // splits = [],
     roomId,
@@ -105,8 +105,7 @@ export async function completeSession(userId, payload) {
     p_user_id:        userId,
     p_distance:       distanceMetres,
     p_loop_points:    loopPointsTotal,
-    // === REMOVED (temporary): Splits/pace/elevation ===
-    // p_elevation_gain: elevationGainMetres,
+    p_elevation_gain: elevationGainMetres,
   })
 
   if (statsError) throw statsError
