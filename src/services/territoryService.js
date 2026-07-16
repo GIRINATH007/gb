@@ -88,8 +88,8 @@ export async function processTrackingSession(userId, sessionId, points, roomId) 
   const capturePointsList = executedCaptures.map((cap) =>
     calculateCapturePoints(cap.overlap_sqm || 0, !!cap.prev_owner_id)
   )
-  const totalPoints = creationPoints.points +
-    capturePointsList.reduce((sum, c) => sum + c.points, 0)
+  const territoryPoints = capturePointsList.reduce((sum, c) => sum + c.points, 0)
+  const totalPoints = creationPoints.points + territoryPoints
 
   // Step 7: If scoped to a room, update room score
   let scoreDelta = 0
@@ -106,6 +106,9 @@ export async function processTrackingSession(userId, sessionId, points, roomId) 
     territory: { id: territory.territory_id, area_sqm: territory.area_sqm },
     captures: executedCaptures,
     pointsEarned: totalPoints,
+    distancePoints: creationPoints.points,
+    territoryPoints,
+    capturePoints: capturePointsList,
     scoreDelta,
   }
 }

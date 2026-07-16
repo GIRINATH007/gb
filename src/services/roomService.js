@@ -219,7 +219,7 @@ export async function getUserRooms(userId) {
       throw new AuthAppError('Failed to fetch rooms', 500, 'FETCH_ERROR')
     }
 
-    return rooms.map(rm => ({
+    const base = rooms.map(rm => ({
       id: rm.rooms.id,
       code: rm.rooms.code,
       name: rm.rooms.name,
@@ -229,6 +229,21 @@ export async function getUserRooms(userId) {
       joinedAt: rm.joined_at,
       createdAt: rm.rooms.created_at,
     }))
+
+    // Enrich with territory count per room
+    const enriched = await Promise.all(base.map(async (r) => {
+      try {
+        const { count } = await supabase
+          .from('territories')
+          .select('id', { count: 'exact', head: true })
+          .eq('owner_id', userId)
+          .eq('room_id', r.id)
+        return { ...r, territoryCount: count ?? 0 }
+      } catch {
+        return { ...r, territoryCount: 0 }
+      }
+    }))
+    return enriched
   } catch (error) {
     if (error instanceof AuthAppError) {
       throw error
