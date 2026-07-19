@@ -1,5 +1,5 @@
-import { randomUUID } from 'node:crypto'
 import supabase from '../config/supabase.js'
+import { getRoomTerritories } from '../queries/territoryQueries.js'
 import { AuthAppError } from '../utils/authErrors.js'
 
 const MAX_ROOMS_PER_USER = 5
@@ -346,29 +346,6 @@ export async function leaveRoom(userId, roomId) {
 }
 
 /**
- * Explicitly capture a path in a room (alternative to piggybacking on tracking).
- * Generates a temporary session reference and runs the territory pipeline.
- *
- * @param {string} userId
- * @param {string} roomId
- * @param {Array<{lat: number, lng: number}>} points
- * @param {number} distanceMetres
- * @returns {Promise<object>} Territory + captures + pointsEarned + scoreDelta
- */
-export async function capturePathInRoom(userId, roomId, points, distanceMetres) {
-  const tempSessionId = randomUUID()
-
-  const result = await processTrackingSession(userId, tempSessionId, points, roomId)
-
-  return {
-    territory: result.territory,
-    captures: result.captures,
-    pointsEarned: result.pointsEarned,
-    scoreDelta: result.scoreDelta,
-  }
-}
-
-/**
  * Get all territories in a room (for map overlay as GeoJSON).
  *
  * @param {string} roomId
@@ -376,7 +353,7 @@ export async function capturePathInRoom(userId, roomId, points, distanceMetres) 
  */
 export async function getTerritoriesForRoom(roomId) {
   try {
-    const territories = await getTerritoriesQuery(roomId)
+    const territories = await getRoomTerritories(roomId)
     return territories
   } catch (error) {
     if (error instanceof AuthAppError) throw error

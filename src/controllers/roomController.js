@@ -95,36 +95,6 @@ export async function getRoomLeaderboard(req, res) {
   }
 }
 
-//POST /rooms/:roomId/score
-export async function updateScore(req, res) {
-  try {
-    const userId = req.user.id
-    const { roomId } = req.params
-    const { scoreIncrement } = req.body
-
-    if (
-      typeof scoreIncrement !== 'number' ||
-      scoreIncrement === 0 ||
-      !Number.isInteger(scoreIncrement)
-    ) {
-      return res.status(400).json({
-        success: false,
-        message: 'Score increment must be a non-zero integer',
-        code: 'VALIDATION_ERROR',
-      })
-    }
-
-    const updated = await roomService.updateRoomScore(userId, roomId, scoreIncrement)
-
-    return res.status(200).json({
-      success: true,
-      score: updated.score,
-    })
-  } catch (error) {
-    return handleError(res, error)
-  }
-}
-
 //POST /rooms/:roomId/leave
 export async function leaveRoom(req, res) {
   try {
@@ -136,32 +106,6 @@ export async function leaveRoom(req, res) {
     return res.status(200).json({
       success: true,
       message: 'Left room successfully',
-    })
-  } catch (error) {
-    return handleError(res, error)
-  }
-}
-
-//POST /rooms/:roomId/capture
-export async function capturePath(req, res) {
-  try {
-    const userId = req.user.id
-    const { roomId } = req.params
-    const { points, distanceMetres } = req.body
-
-    if (!Array.isArray(points) || points.length < 2) {
-      return res.status(400).json({
-        success: false,
-        message: 'At least 2 GPS points are required',
-        code: 'VALIDATION_ERROR',
-      })
-    }
-
-    const result = await roomService.capturePathInRoom(userId, roomId, points, distanceMetres || 0)
-
-    return res.status(200).json({
-      success: true,
-      ...result,
     })
   } catch (error) {
     return handleError(res, error)
