@@ -67,14 +67,18 @@ export async function completeSession(userId, payload) {
 
   // Optionally credit distance only (non-competitive profile stat)
   if (!result.alreadySaved && distanceMetres > 0) {
-    await supabaseServiceRole.rpc('add_tracking_stats', {
-      p_user_id:        userId,
-      p_distance:       distanceMetres,
-      p_loop_points:    0,
-      p_elevation_gain: 0,
-    }).catch((err) => {
+    try {
+      const { error: statsErr } = await supabaseServiceRole.rpc('add_tracking_stats', {
+        p_user_id:     userId,
+        p_distance:    distanceMetres,
+        p_loop_points: 0,
+      })
+      if (statsErr) {
+        console.warn('[tracking] distance stats update failed:', statsErr?.message)
+      }
+    } catch (err) {
       console.warn('[tracking] distance stats update failed:', err?.message)
-    })
+    }
   }
 
   return {
