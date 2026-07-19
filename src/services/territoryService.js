@@ -6,7 +6,6 @@ import {
 import { captureTerritory } from '../queries/captureQueries.js'
 import { resolveCaptures } from './captureService.js'
 import { calculateCreationPoints, calculateCapturePoints } from './scoringService.js'
-import { updateRoomScore } from './roomService.js'
 
 /**
  * Process a completed tracking session through the territory pipeline.
@@ -95,8 +94,8 @@ export async function processTrackingSession(userId, sessionId, points, roomId) 
   let scoreDelta = 0
   if (roomId && totalPoints > 0) {
     try {
-      const updated = await updateRoomScore(userId, roomId, totalPoints)
-      scoreDelta = updated.score
+      // Score sync is now handled by the complete_room_tracking RPC
+      scoreDelta = totalPoints
     } catch (err) {
       console.warn(`[territory] failed to update room score: ${err?.message}`)
     }

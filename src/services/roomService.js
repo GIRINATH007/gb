@@ -1,8 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import supabase from '../config/supabase.js'
 import { AuthAppError } from '../utils/authErrors.js'
-import { processTrackingSession } from './territoryService.js'
-import { getRoomTerritories as getTerritoriesQuery } from '../queries/territoryQueries.js'
 
 const MAX_ROOMS_PER_USER = 5
 const MAX_ROOM_MEMBERS = 20
@@ -279,40 +277,22 @@ export async function getRoomLeaderboard(roomId) {
   }
 }
 
-export async function updateRoomScore(userId, roomId, scoreIncrement) {
-  try {
-    const { data: member, error: fetchError } = await supabase
-      .from('room_members')
-      .select('score')
-      .eq('user_id', userId)
-      .eq('room_id', roomId)
-      .single()
+/**
+ * Sync room member scores by recalculating from territory ownership.
+ * Calls the sync_room_member_scores RPC which recalculates scores from territory areas.
+ *
+ * @param {string} roomId
+ * @param {Array<string>} userIds - Array of user IDs to sync
+ * @returns {Promise<void>}
+ */
+export async function syncRoomMemberScores(roomId, userIds) {
+  const { error } = await supabase.rpc('sync_room_member_scores', {
+    p_room_id: roomId,
+    p_user_ids: userIds,
+  })
 
-    if (fetchError || !member) {
-      throw new AuthAppError('User not in room', 404, 'USER_NOT_IN_ROOM')
-    }
-
-    // Update score
-    const { data: updated, error: updateError } = await supabase
-      .from('room_members')
-      .update({
-        score: member.score + scoreIncrement,
-      })
-      .eq('user_id', userId)
-      .eq('room_id', roomId)
-      .select()
-      .single()
-
-    if (updateError) {
-      throw new AuthAppError('Failed to update score', 500, 'UPDATE_ERROR')
-    }
-
-    return updated
-  } catch (error) {
-    if (error instanceof AuthAppError) {
-      throw error
-    }
-    throw new AuthAppError('Update score failed', 500, 'UPDATE_SCORE_FAILED')
+  if (error) {
+    throw new AuthAppError('Failed to sync scores', 500, 'SYNC_SCORES_FAILED')
   }
 }
 

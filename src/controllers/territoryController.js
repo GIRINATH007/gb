@@ -21,13 +21,12 @@ export async function listMyTerritories(req, res) {
 }
 
 export async function listAllTerritories(req, res) {
-  try {
-    const territories = await getAllTerritories()
-    return res.json({ success: true, data: territories })
-  } catch (error) {
-    console.error('[territories/all]', error)
-    return res.status(500).json({ success: false, message: error.message })
-  }
+  // MVP: global territory map deprecated — use GET /rooms/:roomId/territories
+  return res.status(410).json({
+    success: false,
+    message: 'Global territories endpoint deprecated. Use room-scoped territories.',
+    code: 'DEPRECATED',
+  })
 }
 
 export async function myStats(req, res) {
