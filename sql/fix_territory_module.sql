@@ -46,7 +46,7 @@ BEGIN
 
   INSERT INTO territories (owner_id, session_id, geometry, area_sqm, room_id)
   VALUES (p_user_id, p_session_id, ST_Multi(v_polygon), ST_Area(v_polygon::geography), p_room_id)
-  RETURNING id, area_sqm INTO v_territory_id, v_area_sqm;
+  RETURNING id, territories.area_sqm INTO v_territory_id, v_area_sqm;
 
   territory_id := v_territory_id;
   area_sqm := v_area_sqm;
@@ -192,11 +192,11 @@ BEGIN
           v_part_area := ST_Area(v_dump.geom::geography);
           IF v_part_area < v_min_territory THEN CONTINUE; END IF;
           IF v_first_part THEN
-            UPDATE territories SET geometry = v_dump.geom, area_sqm = v_part_area WHERE id = v_victim.id;
+            UPDATE territories SET geometry = ST_Multi(v_dump.geom), area_sqm = v_part_area WHERE id = v_victim.id;
             v_first_part := FALSE;
           ELSE
             INSERT INTO territories (owner_id, session_id, geometry, area_sqm, room_id)
-            VALUES (v_victim.owner_id, v_victim.session_id, v_dump.geom, v_part_area, p_room_id);
+            VALUES (v_victim.owner_id, v_victim.session_id, ST_Multi(v_dump.geom), v_part_area, p_room_id);
           END IF;
         END LOOP;
         IF v_first_part THEN DELETE FROM territories WHERE id = v_victim.id; END IF;
@@ -256,6 +256,6 @@ BEGIN
   WHERE t.room_id = p_room_id
     AND (p_user_id IS NULL OR t.owner_id = p_user_id)
   GROUP BY t.owner_id
-  ORDER BY total_area_sqm DESC;
+  ORDER BY 3 DESC;
 END;
 $$;
