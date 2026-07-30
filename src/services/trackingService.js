@@ -32,7 +32,7 @@ export async function completeSession(userId, payload) {
     p_duration_seconds:  durationSeconds,
     p_distance_metres:   distanceMetres,
     p_points:            points,
-    p_buffer_metres:     20,
+    p_buffer_metres:     5,
   })
 
   if (error) {
