@@ -32,6 +32,10 @@ CREATE OR REPLACE FUNCTION create_territory_from_path(
 DECLARE
   v_line          public.geometry;
   v_polygon       public.geometry;
+  v_first_pt      public.geometry;
+  v_last_pt       public.geometry;
+  v_ring          public.geometry;
+  v_interior      public.geometry;
   v_territory_id  UUID;
   v_area_sqm      FLOAT;
 BEGIN
@@ -42,7 +46,24 @@ BEGIN
     ) FROM jsonb_array_elements(p_points) AS point)
   ), 4326) INTO v_line;
 
+  -- Default: a buffer ribbon along the walked path
   v_polygon := ST_Buffer(v_line::geography, p_buffer_metres)::geometry;
+
+  -- If the path closes back on itself (start within 25 m of the end), also
+  -- fill the interior of the loop so the territory renders as a solid shaded
+  -- region instead of an empty ring. The union keeps the buffer ribbon
+  -- around the track itself.
+  IF ST_NPoints(v_line) >= 4 THEN
+    v_first_pt := ST_StartPoint(v_line);
+    v_last_pt  := ST_EndPoint(v_line);
+    IF ST_Distance(v_first_pt::geography, v_last_pt::geography) < 25 THEN
+      v_ring     := ST_AddPoint(v_line, v_first_pt); -- close the ring exactly
+      v_interior := ST_BuildArea(v_ring);
+      IF v_interior IS NOT NULL AND NOT ST_IsEmpty(v_interior) THEN
+        v_polygon := ST_MakeValid(ST_Union(v_polygon, v_interior));
+      END IF;
+    END IF;
+  END IF;
 
   INSERT INTO territories (owner_id, session_id, geometry, area_sqm, room_id)
   VALUES (p_user_id, p_session_id, ST_Multi(v_polygon), ST_Area(v_polygon::geography), p_room_id)

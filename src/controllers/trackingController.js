@@ -11,6 +11,7 @@ export async function saveTrack(req, res, next) {
       durationSeconds,
       points,
       distanceMetres,
+      loops,
     } = req.body
 
     if (!roomId) {
@@ -29,14 +30,31 @@ export async function saveTrack(req, res, next) {
       })
     }
 
+    // Numeric guard — prevent negative/NaN values from corrupting stats
+    const safeDuration = Math.max(0, parseInt(durationSeconds, 10) || 0)
+    const safeDistance  = Math.max(0, parseFloat(distanceMetres) || 0)
+    const loopsCompleted = Array.isArray(loops)
+      ? Math.max(0, loops.length)
+      : Math.max(0, parseInt(loops, 10) || 0)
+
+    // Size guard — prevent abuse via enormous payloads
+    if (points.length > 50_000) {
+      return res.status(400).json({
+        success: false,
+        message: `Too many GPS points (${points.length}). Maximum is 50,000.`,
+        code: 'VALIDATION_ERROR',
+      })
+    }
+
     const result = await trackingService.completeSession(userId, {
       localSessionId,
       roomId,
       startedAt,
       endedAt,
-      durationSeconds,
-      distanceMetres,
+      durationSeconds: safeDuration,
+      distanceMetres:  safeDistance,
       points,
+      loopsCompleted,
     })
 
     return res.status(201).json({

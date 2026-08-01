@@ -3,6 +3,12 @@ import { AuthAppError } from '../utils/authErrors.js'
 
 const PG_UNIQUE_VIOLATION = '23505'
 
+// Loop Points economy — mirrors the frontend estimate (lib/tracking/scoring.js):
+// 1 point per 10 m travelled + a flat 50-point bonus per completed loop.
+// Credited to user_stats.loop_points via add_tracking_stats.
+const POINTS_PER_METRE          = 0.1
+const LOOP_BONUS_POINTS_PER_LOOP = 50
+
 /**
  * Persist a completed room-scoped tracking session via the atomic
  * complete_room_tracking RPC (territory + partial capture + score sync).
@@ -10,7 +16,7 @@ const PG_UNIQUE_VIOLATION = '23505'
  * Idempotent on local_session_id — retries return alreadySaved: true.
  *
  * @param {string} userId
- * @param {{ localSessionId, roomId, startedAt, endedAt, distanceMetres, durationSeconds, points }} payload
+ * @param {{ localSessionId, roomId, startedAt, endedAt, distanceMetres, durationSeconds, points, loopsCompleted }} payload
  */
 export async function completeSession(userId, payload) {
   const {
@@ -21,7 +27,11 @@ export async function completeSession(userId, payload) {
     distanceMetres,
     durationSeconds,
     points,
+    loopsCompleted = 0,
   } = payload
+
+  const loopPointsAwarded = Math.round((distanceMetres || 0) * POINTS_PER_METRE)
+    + (loopsCompleted || 0) * LOOP_BONUS_POINTS_PER_LOOP
 
   const { data, error } = await supabaseServiceRole.rpc('complete_room_tracking', {
     p_user_id:           userId,
@@ -54,7 +64,7 @@ export async function completeSession(userId, payload) {
       if (existing) {
         return {
           id: existing.id,
-          loopPointsAwarded: 0,
+          loopPointsAwarded,
           alreadySaved: true,
           territory: null,
         }
@@ -65,13 +75,13 @@ export async function completeSession(userId, payload) {
 
   const result = typeof data === 'string' ? JSON.parse(data) : data
 
-  // Optionally credit distance only (non-competitive profile stat)
+  // Credit loop points (distance + loop bonus) as a non-competitive profile stat
   if (!result.alreadySaved && distanceMetres > 0) {
     try {
       const { error: statsErr } = await supabaseServiceRole.rpc('add_tracking_stats', {
         p_user_id:     userId,
         p_distance:    distanceMetres,
-        p_loop_points: 0,
+        p_loop_points: loopPointsAwarded,
       })
       if (statsErr) {
         console.warn('[tracking] distance stats update failed:', statsErr?.message)
@@ -83,7 +93,7 @@ export async function completeSession(userId, payload) {
 
   return {
     id: result.sessionId,
-    loopPointsAwarded: 0,
+    loopPointsAwarded,
     alreadySaved: result.alreadySaved || false,
     territory: {
       territory: result.territory,
